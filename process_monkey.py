@@ -11,8 +11,10 @@ from imageio import imread
 from scipy.misc import imresize
 import hickle as hkl
 from kitti_settings import *
+import glob
+import re
 
-
+DATA_DIR = "monkey_data"
 desired_im_sz = (128, 160)  # image size for utube video seems to be 1280 *720
 # categories = ['city', 'residential', 'road']
 
@@ -53,7 +55,7 @@ def extract_data():
             command = 'unzip -qq ' + c_dir + f + ' ' + spec_folder + ' -d ' + c_dir + f[:-4]
             os.system(command)
 
-
+excluded_list = []
 # Create image datasets.
 # Processes images and saves them in train, val, test splits.
 def process_data():
@@ -61,16 +63,36 @@ def process_data():
     splits['val'] = val_recordings
     splits['test'] = test_recordings
     not_train = splits['val'] + splits['test']
-    for c in categories:  # Randomly assign recordings to training and testing. Cross-validation done across entire recordings.
-        c_dir = os.path.join(DATA_DIR, 'raw', c + '/')
-        folders= list(os.walk(c_dir, topdown=False))[-1][-2]
-        splits['train'] += [(c, f) for f in folders if (c, f) not in not_train]
+    # for c in categories:  # Randomly assign recordings to training and testing. Cross-validation done across entire recordings.
+    c_dir = os.path.join(DATA_DIR, 'RAW','/')
+    folders = os.listdir(c_dir) # list(os.walk(c_dir, topdown=False))[-1][-2]
+    for folder in folders:
+        if folder in excluded_list:
+            continue
+        filenames = sorted(glob.glob1(os.path.join(c_dir, folder), '*.jpg'))
+        num_pat = re.compile("([0-9]+)\.")
+        img_ids = [int(num_pat.search(filename).group(1)) for filename in filenames]
+        start_id = min(img_ids)
+        cur_id = start_id
+        start_i = 0
+        groups = []
+        for i, img_id in enumerate(img_ids):
+            if img_id == cur_id:
+                cur_id += 1
+            else:
+                groups.append( ((start_i, i + 1), (start_id, cur_id)) )  # (start_i, end_i + 1), (start_id, end_id)
+                # filename[start_i:i+1] = ['start_id', ... 'end_id']
+                start_id = img_id
+                start_i = i + 1
+                cur_id = img_id + 1  # predictive coding!
 
+        # splits['train'] += [(c, f) for f in folders if (c, f) not in not_train]
+    # TODO!
     for split in splits:
         im_list = []
         source_list = []  # corresponds to recording that image came from
-        for category, folder in splits[split]:
-            im_dir = os.path.join(DATA_DIR, 'raw/', category, folder, folder[:10], folder, 'image_03/data/')
+        for folder in splits[split]:
+            im_dir = os.path.join(DATA_DIR, 'RAW/', folder)
             files = list(os.walk(im_dir, topdown=False))[-1][-1]
             im_list += [im_dir + f for f in sorted(files)]
             source_list += [category + '-' + folder] * len(files)
