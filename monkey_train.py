@@ -4,7 +4,7 @@ Train PredNet on Monkey natural movie sequences. (Geiger et al. 2013, http://www
 
 import os
 import numpy as np
-np.random.seed(123)
+np.random.seed(42)
 from six.moves import cPickle
 
 from keras import backend as K
