@@ -20,8 +20,7 @@ desired_im_sz = (128, 160)  # image size for utube video seems to be 1280 *720
 
 # Recordings used for validation and testing.
 # Were initially chosen randomly such that one of the city recordings was used for validation and one of each category was used for testing.
-val_recordings = [('city', '2011_09_26_drive_0005_sync')]
-test_recordings = [('city', '2011_09_26_drive_0104_sync'), ('residential', '2011_09_26_drive_0079_sync'), ('road', '2011_09_26_drive_0070_sync')]
+
 
 if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
 
@@ -56,6 +55,9 @@ if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
 #             os.system(command)
 
 excluded_list = []
+val_recordings = [('monkey_cat', (2892, 3334))]
+test_recordings = [('monkey_cat', (5066, 5604)), ('monkey_baby', (327, 663)), ('monkey_dog', (1574, 2083))]
+# To do, get any clip as test and validation recording
 # Create image datasets.
 # Processes images and saves them in train, val, test splits.
 def process_data():
@@ -65,43 +67,48 @@ def process_data():
     not_train = splits['val'] + splits['test']
     # for c in categories:  # Randomly assign recordings to training and testing. Cross-validation done across entire recordings.
     c_dir = os.path.join(DATA_DIR, 'RAW') # no \
-    seq_clip_list ={}
+    seq_clip_list = {}
     folders = os.listdir(c_dir) # list(os.walk(c_dir, topdown=False))[-1][-2]
     for folder in folders:
         if folder in excluded_list:
             continue
         filenames = sorted(glob.glob1(os.path.join(c_dir, folder), '*.jpg'))
-        num_pat = re.compile("([0-9]+)\.")
+        num_pat = re.compile("([0-9]+)\.")  # extract the numbering of frame
         img_ids = [int(num_pat.search(filename).group(1)) for filename in filenames]
         start_id = min(img_ids)
         cur_id = start_id
         start_i = 0
+        fn_groups = []
         groups = []
         for i, img_id in enumerate(img_ids):
             if img_id == cur_id:
                 cur_id += 1
                 if img_id == img_ids[-1]:
-                    groups.append(((start_i, i + 1), (start_id, cur_id - 1)))
-            else:
-                groups.append( ((start_i, i + 1), (start_id, cur_id - 1)) )
+                    fn_groups.append((start_id, cur_id - 1))
+                    groups.append((start_i, i + 1))
+            else: # if there is discontinuity in frame number, start a new group
+                fn_groups.append((start_id, cur_id - 1)) # frame number
+                groups.append((start_i, i + 1)) # list number
                 # (start_i, end_i + 1), (start_id, end_id)
                 # filename[start_i:i+1] = ['start_id', ... 'end_id']
                 start_id = img_id
                 start_i = i + 1
                 cur_id = img_id + 1  # predictive coding!
-        seq_clip_list[folder] = groups
-        # splits['train'] += [(c, f) for f in folders if (c, f) not in not_train]
+        seq_clip_list[folder] = (fn_groups, groups)
+        splits['train'] += [(folder, clip) for clip in fn_groups if (folder, clip) not in not_train]
     # TODO!
     for split in splits:
         im_list = []
         source_list = []  # corresponds to recording that image came from
-        for folder in splits[split]:
-            im_dir = os.path.join(DATA_DIR, 'RAW/', folder)
-            files = list(os.walk(im_dir, topdown=False))[-1][-1]
-            im_list += [im_dir + f for f in sorted(files)]
-            source_list += [category + '-' + folder] * len(files)
+        for folder, clip in splits[split]:
+            im_dir = os.path.join(DATA_DIR, 'RAW', folder)
+            filenames = sorted(glob.glob1(os.path.join(c_dir, folder), '*.jpg'))
+            fn_groups, groups = seq_clip_list[folder]
+            id_clip = groups[fn_groups.index(clip)]
+            im_list += [im_dir + '\\' + f for f in filenames[id_clip[0]:id_clip[1]]]
+            source_list += [folder + '-%d_%d' % (clip[0], clip[1])] * (id_clip[1] - id_clip[0])
 
-        print( 'Creating ' + split + ' data: ' + str(len(im_list)) + ' images')
+        print('Creating ' + split + ' data: ' + str(len(im_list)) + ' images')
         X = np.zeros((len(im_list),) + desired_im_sz + (3,), np.uint8)
         for i, im_file in enumerate(im_list):
             im = imread(im_file)
@@ -109,7 +116,7 @@ def process_data():
 
         hkl.dump(X, os.path.join(DATA_DIR, 'X_' + split + '.hkl'))
         hkl.dump(source_list, os.path.join(DATA_DIR, 'sources_' + split + '.hkl'))
-
+    t1 = time.time() - t0
 
 # resize and crop image
 def process_im(im, desired_sz):

@@ -1,5 +1,5 @@
 '''
-Train PredNet on KITTI sequences. (Geiger et al. 2013, http://www.cvlibs.net/datasets/kitti/)
+Train PredNet on Monkey natural movie sequences. (Geiger et al. 2013, http://www.cvlibs.net/datasets/kitti/)
 '''
 
 import os
@@ -17,7 +17,7 @@ from keras.optimizers import Adam
 
 from prednet import PredNet
 from data_utils import SequenceGenerator
-from kitti_settings import *
+from monkey_setting import *
 
 
 save_model = True  # if weights will be saved
