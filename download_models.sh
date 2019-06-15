@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 savedir="model_data_keras2"
 mkdir -p -- "$savedir"
 wget https://www.dropbox.com/s/iutxm0anhxqca0z/model_data_keras2.zip?dl=0 -O $savedir/model_data_keras2.zip
