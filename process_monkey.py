@@ -10,9 +10,10 @@ import numpy as np
 from imageio import imread
 from scipy.misc import imresize
 import hickle as hkl
-from kitti_settings import *
+from monkey_setting import *
 import glob
 import re
+from time import time
 
 DATA_DIR = "monkey_data"
 desired_im_sz = (128, 160)  # image size for utube video seems to be 1280 *720
@@ -55,13 +56,14 @@ if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
 #             os.system(command)
 
 excluded_list = []
-val_recordings = [('monkey_cat', (2892, 3334))]
+val_recordings = [('monkey_cat', (2892, 3334)), ('monkey_baby', (327, 663)), ('monkey_dog', (1574, 2083))]
 test_recordings = [('monkey_cat', (5066, 5604)), ('monkey_baby', (327, 663)), ('monkey_dog', (1574, 2083))]
 # To do, get any clip as test and validation recording
 # Create image datasets.
 # Processes images and saves them in train, val, test splits.
+downsample_rate = 3
 def process_data():
-    splits = {s: [] for s in ['train', 'test', 'val']}
+    splits = {s: [] for s in ['val']} # 'train', 'test', 
     splits['val'] = val_recordings
     splits['test'] = test_recordings
     not_train = splits['val'] + splits['test']
@@ -95,9 +97,11 @@ def process_data():
                 start_i = i + 1
                 cur_id = img_id + 1  # predictive coding!
         seq_clip_list[folder] = (fn_groups, groups)
-        splits['train'] += [(folder, clip) for clip in fn_groups if (folder, clip) not in not_train]
+        if 'train' in splits:
+            splits['train'] += [(folder, clip) for clip in fn_groups if (folder, clip) not in not_train]
     # TODO!
     for split in splits:
+        t0 = time()
         im_list = []
         source_list = []  # corresponds to recording that image came from
         for folder, clip in splits[split]:
@@ -105,8 +109,10 @@ def process_data():
             filenames = sorted(glob.glob1(os.path.join(c_dir, folder), '*.jpg'))
             fn_groups, groups = seq_clip_list[folder]
             id_clip = groups[fn_groups.index(clip)]
-            im_list += [im_dir + '\\' + f for f in filenames[id_clip[0]:id_clip[1]]]
-            source_list += [folder + '-%d_%d' % (clip[0], clip[1])] * (id_clip[1] - id_clip[0])
+            for res in range(downsample_rate):
+                index_rng = range(id_clip[0] + res, id_clip[1], downsample_rate)
+                im_list += [im_dir + '\\' + f for f in filenames[id_clip[0] + res: id_clip[1]: downsample_rate]]
+                source_list += [folder + '-%d_%d-%d' % (clip[0], clip[1], res)] * len(index_rng)
 
         print('Creating ' + split + ' data: ' + str(len(im_list)) + ' images')
         X = np.zeros((len(im_list),) + desired_im_sz + (3,), np.uint8)
@@ -116,7 +122,7 @@ def process_data():
 
         hkl.dump(X, os.path.join(DATA_DIR, 'X_' + split + '.hkl'))
         hkl.dump(source_list, os.path.join(DATA_DIR, 'sources_' + split + '.hkl'))
-    t1 = time.time() - t0
+        print('Spent %.1f s.' % (time() - t0))
 
 # resize and crop image
 def process_im(im, desired_sz):

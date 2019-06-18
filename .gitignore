@@ -98,3 +98,4 @@ monkey_data/sources_val.hkl
 monkey_data/X_test.hkl
 monkey_data/X_train.hkl
 monkey_data/X_val.hkl
+*.png
